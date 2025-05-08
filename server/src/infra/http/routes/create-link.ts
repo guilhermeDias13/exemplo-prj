@@ -1,4 +1,7 @@
-import { createLinkFn } from '@/functions/create-link'
+import { createLink } from '@/app/functions/create-link'
+import { isLeft } from '@/infra/shared/either'
+import { createLinkSchema } from '@/infra/shared/schemas/create-link.schema'
+import { linkSchema } from '@/infra/shared/schemas/link.schema'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 
@@ -7,53 +10,27 @@ export const createLinkRoute: FastifyPluginAsyncZod = async server => {
     '/links',
     {
       schema: {
-        summary: 'Create a link',
-        body: z.object({
-          urlShortened: z.string().url(),
-          urlOriginal: z.string().url(),
-        }),
+        summary: 'Create a new link',
+        body: createLinkSchema,
         response: {
-          201: z
-            .object({
-              urlShortened: z.string().url().describe('URL shortened'),
-              urlOriginal: z.string().url().describe('URL original'),
-              numberOfAccess: z.number().describe('Number of access of link'),
-              createdAt: z.date().nullable().describe('New URL shortened'),
-            })
-            .describe('New link created'),
-
-          400: z
-            .object({
-              errors: z.array(
-                z.object({
-                  name: z.string(),
-                  error: z.string(),
-                })
-              ),
-            })
-            .describe('Invalid request body'),
-
-          409: z
-            .object({
-              message: z.string(),
-            })
-            .describe('Link shortened url already exists'),
+          200: z.object({ id: linkSchema.shape.id }),
+          400: z.object({
+            message: z.string(),
+          }),
         },
       },
     },
     async (request, reply) => {
-      const newLink = await createLinkFn(request.body)
+      const result = await createLink(
+        request.body.originalUrl,
+        request.body.shortUrl
+      )
 
-      if (newLink === null) {
-        return reply.status(409).send({
-          message: 'URL encurtada já existe!',
-        })
+      if (isLeft(result)) {
+        return reply.status(400).send({ message: result.left })
       }
 
-      return reply.status(201).send({
-        ...newLink,
-        numberOfAccess: 0,
-      })
+      return reply.status(200).send({ id: result.right.id })
     }
   )
 }

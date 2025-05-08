@@ -6,27 +6,28 @@ import { Upload } from '@aws-sdk/lib-storage'
 import { z } from 'zod'
 import { r2 } from './client'
 
-const uploadFileToStorageSchema = z.object({
+const uploadFileToStorageInput = z.object({
+  folder: z.enum(['csv', 'downloads']),
   fileName: z.string(),
   contentType: z.string(),
   contentStream: z.instanceof(Readable),
 })
 
-type UploadFileToStorageProps = z.infer<typeof uploadFileToStorageSchema>
+type UploadFileToStorageInput = z.input<typeof uploadFileToStorageInput>
 
-export async function uploadFileToStorage(props: UploadFileToStorageProps) {
-  const { fileName, contentType, contentStream } =
-    uploadFileToStorageSchema.parse(props)
+export async function uploadFileToStorage(input: UploadFileToStorageInput) {
+  const { folder, fileName, contentType, contentStream } =
+    uploadFileToStorageInput.parse(input)
 
   const fileExtension = extname(fileName)
-  const fileNameWithoutExtension = basename(fileName).replace(fileExtension, '')
+  const fileNameWithoutExtension = basename(fileName)
   const sanitizedFileName = fileNameWithoutExtension.replace(
     /[^a-zA-Z0-9]/g,
     ''
   )
-  const sanitizedFileNameWithExtension = `${sanitizedFileName}${fileExtension}`
+  const sanitizedFileNameWithExtension = sanitizedFileName.concat(fileExtension)
 
-  const uniqueFileName = `downloads/${randomUUID()}-${sanitizedFileNameWithExtension}`
+  const uniqueFileName = `${folder}/${randomUUID()}-${sanitizedFileNameWithExtension}`
 
   const upload = new Upload({
     client: r2,

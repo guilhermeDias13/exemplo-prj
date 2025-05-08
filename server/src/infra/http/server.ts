@@ -1,14 +1,19 @@
-import fastifyCors from '@fastify/cors'
+import { fastifyCors } from '@fastify/cors'
 import fastifySwagger from '@fastify/swagger'
-import scalarUI from '@scalar/fastify-api-reference'
-import fastify from 'fastify'
+import fastifySwaggerUi from '@fastify/swagger-ui'
+import { fastify } from 'fastify'
 import {
   hasZodFastifySchemaValidationErrors,
   jsonSchemaTransform,
   serializerCompiler,
   validatorCompiler,
 } from 'fastify-type-provider-zod'
-import { routes } from './routes'
+import { createLinkRoute } from './routes/create-link'
+import { deleteLinkRoute } from './routes/delete-link'
+import { exportLinksRoute } from './routes/export-links'
+import { getLinkByShortUrlRoute } from './routes/get-link'
+import { getLinksRoute } from './routes/get-paged-links'
+import { incrementLinkAccessRoute } from './routes/increment-link-access'
 
 const server = fastify()
 
@@ -19,41 +24,42 @@ server.setErrorHandler((error, request, reply) => {
   if (hasZodFastifySchemaValidationErrors(error)) {
     return reply.status(400).send({
       message: 'Validation error',
-      errors: error.validation,
+      issues: error.validation,
     })
   }
 
-  return reply.status(500).send({
-    message: 'Internal server error',
-  })
+  console.error(error)
+
+  return reply.status(500).send({ message: 'Internal server error.' })
 })
 
 server.register(fastifyCors, {
   origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 })
 
 server.register(fastifySwagger, {
   openapi: {
     info: {
-      title: 'Brev.ly API Docs',
+      title: 'Brevly API',
       version: '1.0.0',
     },
   },
   transform: jsonSchemaTransform,
 })
 
-Object.values(routes).map(route => server.register(route))
-
-server.register(scalarUI, {
+server.register(fastifySwaggerUi, {
   routePrefix: '/docs',
-  configuration: {
-    theme: 'purple',
-    layout: 'modern',
-  },
 })
 
+server.register(createLinkRoute)
+server.register(getLinksRoute)
+server.register(getLinkByShortUrlRoute)
+server.register(incrementLinkAccessRoute)
+server.register(deleteLinkRoute)
+server.register(exportLinksRoute)
+
 server.listen({ port: 3333, host: '0.0.0.0' }).then(() => {
-  console.log('HTTP Server Running! 🚀')
+  console.log('HTTP server running on http://localhost:3333')
 })

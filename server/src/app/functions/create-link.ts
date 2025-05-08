@@ -1,33 +1,52 @@
-import { db } from '@/postgres'
-import { schema } from '@/schema'
-import { eq } from 'drizzle-orm'
-import { z } from 'zod'
+import { db } from '@/infra/db'
+import { schema } from '@/infra/db/schemas'
+import {
+  type Either,
+  isRight,
+  makeLeft,
+  makeRight,
+} from '@/infra/shared/either'
+import { ErrorMessages } from '@/infra/shared/error-message.enum'
+import { createLinkSchema } from '@/infra/shared/schemas/create-link.schema'
+import { type LinkData, linkSchema } from '@/infra/shared/schemas/link.schema'
+import { getLinkByShortUrl } from './get-link'
 
-const createLinkSchema = z.object({
-  urlOriginal: z.string().url(),
-  urlShortened: z.string().url(),
-})
+export const createLink = async (
+  originalUrl: string,
+  shortUrl: string
+): Promise<Either<ErrorMessages, LinkData>> => {
+  const parsedInput = createLinkSchema.safeParse({ originalUrl, shortUrl })
 
-type CreateLinkProps = z.infer<typeof createLinkSchema>
+  if (!parsedInput.success) {
+    return makeLeft(ErrorMessages.INVALID_INPUT)
+  }
 
-export async function createLinkFn(linkProps: CreateLinkProps) {
-  const { urlOriginal, urlShortened } = createLinkSchema.parse(linkProps)
+  const existingLink = await getLinkByShortUrl(shortUrl)
 
-  const { links } = schema
+  if (isRight(existingLink)) {
+    return makeLeft(ErrorMessages.SHORT_URL_ALREADY_EXISTS)
+  }
 
-  const existsUrlShortened = await db.query.links.findFirst({
-    where: eq(links.urlShortened, urlShortened),
-  })
-
-  if (existsUrlShortened) return null
-
-  const [createdLink] = await db
-    .insert(links)
+  const inserted = await db
+    .insert(schema.links)
     .values({
-      urlOriginal,
-      urlShortened,
+      originalUrl,
+      shortUrl,
+      accessCount: 0,
     })
     .returning()
 
-  return createdLink
+  const newLink = inserted[0]
+
+  if (!newLink) {
+    return makeLeft(ErrorMessages.INVALID_LINK_DATA)
+  }
+
+  const parsedLink = linkSchema.safeParse(newLink)
+
+  if (!parsedLink.success) {
+    return makeLeft(ErrorMessages.INVALID_LINK_DATA)
+  }
+
+  return makeRight(parsedLink.data)
 }

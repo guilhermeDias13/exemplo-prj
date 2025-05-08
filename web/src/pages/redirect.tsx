@@ -1,25 +1,44 @@
-import { Box } from "@/components/ui/box";
-import { Link } from '@/components/ui/link';
-import { useRedirect } from "@/hooks/useRedirect";
+import { linkService } from '@/services/http'
+import { useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 
 export function Redirect() {
+  const { shortUrl } = useParams()
+  const navigate = useNavigate()
 
-  const { urlOriginal } = useRedirect()
+  const { data, error } = useQuery({
+    queryKey: ['link', shortUrl],
+    queryFn: () => linkService.getLink(shortUrl as string),
+  })
+
+  if (error) {
+    navigate(`/${shortUrl}/not-found`)
+  }
+
+  useEffect(() => {
+    if (data) {
+      window.location.href = data.originalUrl
+    }
+  }, [data, shortUrl])
 
   return (
-    <div className="size-full flex items-center justify-center">
-      <Box className="gap-6 py-16 px-12 w-full items-center max-w-[580px]">
-        <img className='w-[48px] object-contain' src={"/Logo_Icon.svg"} alt='404' />
-        <strong className='text-2xl'>Redirecionando...</strong>
-        <div className='flex flex-col'>
-          <span className='font-semibold text-sm text-gray-500 text-center leading-[18px]'>
+    <div className='flex min-h-screen w-screen items-center justify-center px-3'>
+      <div className='flex flex-col items-center gap-6 rounded-lg bg-gray-100 px-12 py-16'>
+        <img src='/brevly-icon.svg' alt='Brevly logo' className='h-12 w-12' />
+        <h1 className='text-xl text-gray-600'>Redirecionando...</h1>
+        <div className='flex flex-col items-center gap-1'>
+          <p className='text-md text-center text-gray-500'>
             O link será aberto automaticamente em alguns instantes.
-          </span>
-          <span className='font-semibold text-sm text-gray-500 text-center leading-[18px]'>
-            Não foi redirecionado? {urlOriginal !== null && <Link to={urlOriginal}>Acesse aqui</Link>}
-          </span>
+          </p>
+          <p className='text-md text-center text-gray-500'>
+            Não foi redirecionado?{' '}
+            <a href='/' className='text-blue-base underline'>
+              Acesse aqui
+            </a>
+          </p>
         </div>
-      </Box>
+      </div>
     </div>
   )
 }
